@@ -1,0 +1,54 @@
+name: 发布到 GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: 取出代码
+        uses: actions/checkout@v4
+
+      # 仓库里还没有网页时，不发布（避免把空仓库当成半成品页面发出去）。
+      # 等网页文件提交进来，这个判断自然成立，之后就正常发布了。
+      - name: 检查网页文件是否已就位
+        id: check
+        run: |
+          if git ls-files -- 'index.html' 'styles.css' 'js' | grep -q .; then
+            echo "ready=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            echo "仓库里还没有网页文件，跳过发布。"
+          fi
+
+      - name: 配置 Pages
+        if: steps.check.outputs.ready == 'true'
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: 上传静态站点
+        if: steps.check.outputs.ready == 'true'
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: 部署
+        if: steps.check.outputs.ready == 'true'
+        id: deployment
+        uses: actions/deploy-pages@v4
